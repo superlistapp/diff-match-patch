@@ -17,11 +17,12 @@
 library diff;
 
 import 'dart:collection';
+import 'dart:core';
 import 'dart:math';
 
-part 'package:diff_match_patch/src/diff/utils.dart';
-part 'package:diff_match_patch/src/diff/diff.dart';
 part 'package:diff_match_patch/src/diff/cleanup.dart';
-part 'package:diff_match_patch/src/diff/half_match.dart';
 part 'package:diff_match_patch/src/diff/delta.dart';
+part 'package:diff_match_patch/src/diff/diff.dart';
+part 'package:diff_match_patch/src/diff/half_match.dart';
 part 'package:diff_match_patch/src/diff/main.dart';
+part 'package:diff_match_patch/src/diff/utils.dart';

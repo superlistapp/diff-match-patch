@@ -363,31 +363,83 @@ void cleanupMerge(List<Diff> diffs) {
         pointer++;
         break;
       case DIFF_EQUAL:
-        // Upon reaching an equality, check for prior redundancies.
-        if (count_delete + count_insert > 1) {
-          if (count_delete != 0 && count_insert != 0) {
-            // Factor out any common prefixies.
+        var previous_equality = pointer - count_insert - count_delete - 1;
+        // prevent splitting of unicode surrogate pairs.  when fix_unicode is true,
+        // we assume that the old and new text in the diff are complete and correct
+        // unicode-encoded JS strings, but the tuple boundaries may fall between
+        // surrogate pairs.  we fix this by shaving off stray surrogates from the end
+        // of the previous equality and the beginning of this equality.  this may create
+        // empty equalities or a common prefix or suffix.  for example, if AB and AC are
+        // emojis, `[[0, 'A'], [-1, 'BA'], [0, 'C']]` would turn into deleting 'ABAC' and
+        // inserting 'AC', and then the common suffix 'AC' will be eliminated.  in this
+        // particular case, both equalities go away, we absorb any previous inequalities,
+        // and we keep scanning for the next equality before rewriting the tuples.
+        if (previous_equality >= 0 &&
+            _endsWithPairStart(diffs[previous_equality].text)) {
+          final previous_equality_text = diffs[previous_equality].text;
+          final stray =
+              previous_equality_text[previous_equality_text.length - 1];
+          diffs[previous_equality].text = previous_equality_text.substring(
+            0,
+            previous_equality_text.length - 1,
+          );
+          text_delete = stray + text_delete;
+          text_insert = stray + text_insert;
+          if (diffs[previous_equality].text.isEmpty) {
+            // emptied out previous equality, so delete it and include previous delete/insert
+            diffs.splice(previous_equality, 1);
+            pointer--;
+            var k = previous_equality - 1;
+            if (k < diffs.length && diffs[k].operation == DIFF_INSERT) {
+              count_insert++;
+              text_insert = diffs[k].text + text_insert;
+              k--;
+            }
+            if (k < diffs.length && diffs[k].operation == DIFF_DELETE) {
+              count_delete++;
+              text_delete = diffs[k].text + text_delete;
+              k--;
+            }
+            previous_equality = k;
+          }
+        }
+        if (_startsWithPairEnd(diffs[pointer].text)) {
+          var stray = diffs[pointer].text[0];
+          diffs[pointer].text = diffs[pointer].text.substring(1);
+          text_delete += stray;
+          text_insert += stray;
+        }
+        if (pointer < diffs.length - 1 && diffs[pointer].text.isEmpty) {
+          // for empty equality not at end, wait for next equality
+          diffs.splice(pointer, 1);
+          break;
+        }
+        if (text_delete.isNotEmpty || text_insert.isNotEmpty) {
+          // note that diff_commonPrefix and diff_commonSuffix are unicode-aware
+          if (text_delete.isNotEmpty && text_insert.isNotEmpty) {
+            // Factor out any common prefixes.
             commonlength = commonPrefix(text_insert, text_delete);
             if (commonlength != 0) {
-              if ((pointer - count_delete - count_insert) > 0 &&
-                  diffs[pointer - count_delete - count_insert - 1].operation ==
-                      DIFF_EQUAL) {
-                final i = pointer - count_delete - count_insert - 1;
-                diffs[i].text = '${diffs[i].text}'
-                    '${text_insert.substring(0, commonlength)}';
+              if (previous_equality >= 0) {
+                diffs[previous_equality].text +=
+                    text_insert.substring(0, commonlength);
               } else {
-                diffs.insert(0,
-                    Diff(DIFF_EQUAL, text_insert.substring(0, commonlength)));
+                diffs.splice(
+                  0,
+                  0,
+                  [Diff(DIFF_EQUAL, text_insert.substring(0, commonlength))],
+                );
                 pointer++;
               }
               text_insert = text_insert.substring(commonlength);
               text_delete = text_delete.substring(commonlength);
             }
-            // Factor out any common suffixies.
+            // Factor out any common suffixes.
             commonlength = commonSuffix(text_insert, text_delete);
             if (commonlength != 0) {
               diffs[pointer].text =
-                  '${text_insert.substring(text_insert.length - commonlength)}${diffs[pointer].text}';
+                  text_insert.substring(text_insert.length - commonlength) +
+                      diffs[pointer].text;
               text_insert =
                   text_insert.substring(0, text_insert.length - commonlength);
               text_delete =
@@ -395,32 +447,29 @@ void cleanupMerge(List<Diff> diffs) {
             }
           }
           // Delete the offending records and add the merged ones.
-          if (count_delete == 0) {
-            diffs.removeRange(pointer - count_insert, pointer);
-            diffs.insert(
-                pointer - count_insert, Diff(DIFF_INSERT, text_insert));
-          } else if (count_insert == 0) {
-            diffs.removeRange(pointer - count_delete, pointer);
-            diffs.insert(
-                pointer - count_delete, Diff(DIFF_DELETE, text_delete));
+          var n = count_insert + count_delete;
+          if (text_delete.isEmpty && text_insert.isEmpty) {
+            diffs.splice(pointer - n, n);
+            pointer = pointer - n;
+          } else if (text_delete.isEmpty) {
+            diffs.splice(pointer - n, n, [Diff(DIFF_INSERT, text_insert)]);
+            pointer = pointer - n + 1;
+          } else if (text_insert.isEmpty) {
+            diffs.splice(pointer - n, n, [Diff(DIFF_DELETE, text_delete)]);
+            pointer = pointer - n + 1;
           } else {
-            diffs.removeRange(pointer - count_delete - count_insert, pointer);
-            diffs.insert(pointer - count_delete - count_insert,
-                Diff(DIFF_INSERT, text_insert));
-            diffs.insert(pointer - count_delete - count_insert,
-                Diff(DIFF_DELETE, text_delete));
+            diffs.splice(
+              pointer - n,
+              n,
+              [Diff(DIFF_DELETE, text_delete), Diff(DIFF_INSERT, text_insert)],
+            );
+            pointer = pointer - n + 2;
           }
-          pointer = pointer -
-              count_delete -
-              count_insert +
-              (count_delete == 0 ? 0 : 1) +
-              (count_insert == 0 ? 0 : 1) +
-              1;
-        } else if (pointer != 0 && diffs[pointer - 1].operation == DIFF_EQUAL) {
+        }
+        if (pointer != 0 && diffs[pointer - 1].operation == DIFF_EQUAL) {
           // Merge this equality with the previous one.
-          diffs[pointer - 1].text =
-              '${diffs[pointer - 1].text}${diffs[pointer].text}';
-          diffs.removeRange(pointer, pointer + 1);
+          diffs[pointer - 1].text += diffs[pointer].text;
+          diffs.splice(pointer, 1);
         } else {
           pointer++;
         }
@@ -469,5 +518,13 @@ void cleanupMerge(List<Diff> diffs) {
   // If shifts were made, the diff needs reordering and another shift sweep.
   if (changes) {
     cleanupMerge(diffs);
+  }
+}
+
+extension Splice<T> on List<T> {
+  Iterable<T> splice(int start, int count, [List<T>? insert]) {
+    final result = [...getRange(start, start + count)];
+    replaceRange(start, start + count, insert ?? []);
+    return result;
   }
 }
