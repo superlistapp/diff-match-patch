@@ -105,16 +105,29 @@ void charsToLines(List<Diff> diffs, List<String> lineArray) {
 ///
 /// Returns the number of characters common to the start of each string.
 int commonPrefix(String text1, String text2) {
-  // TODO: Once Dart's performance stabilizes, determine if linear or binary
-  // search is better.
+  // Binary search.
   // Performance analysis: http://neil.fraser.name/news/2007/10/09/
-  final n = min(text1.length, text2.length);
-  for (var i = 0; i < n; i++) {
-    if (text1[i] != text2[i]) {
-      return i;
+  var pointerMin = 0;
+  var pointerMax = min(text1.length, text2.length);
+  var pointerMid = pointerMax;
+  var pointerStart = 0;
+  while (pointerMin < pointerMid) {
+    if (text1.substring(pointerStart, pointerMid) ==
+        text2.substring(pointerStart, pointerMid)) {
+      pointerMin = pointerMid;
+      pointerStart = pointerMin;
+    } else {
+      pointerMax = pointerMid;
     }
+    pointerMid = ((pointerMax - pointerMin) / 2 + pointerMin).floor();
   }
-  return n;
+
+  if (pointerMid > 0 &&
+      _isSurrogatePairStart(text1.codeUnitAt(pointerMid - 1))) {
+    pointerMid--;
+  }
+
+  return pointerMid;
 }
 
 /// Determine the common suffix of two strings
@@ -124,18 +137,29 @@ int commonPrefix(String text1, String text2) {
 ///
 /// Returns the number of characters common to the end of each string.
 int commonSuffix(String text1, String text2) {
-  // TODO: Once Dart's performance stabilizes, determine if linear or binary
-  // search is better.
+  // Binary search.
   // Performance analysis: http://neil.fraser.name/news/2007/10/09/
-  final text1_length = text1.length;
-  final text2_length = text2.length;
-  final n = min(text1_length, text2_length);
-  for (var i = 1; i <= n; i++) {
-    if (text1[text1_length - i] != text2[text2_length - i]) {
-      return i - 1;
+  var pointerMin = 0;
+  var pointerMax = min(text1.length, text2.length);
+  var pointerMid = pointerMax;
+  var pointerEnd = 0;
+  while (pointerMin < pointerMid) {
+    if (text1.substring(text1.length - pointerMid, text1.length - pointerEnd) ==
+        text2.substring(text2.length - pointerMid, text2.length - pointerEnd)) {
+      pointerMin = pointerMid;
+      pointerEnd = pointerMin;
+    } else {
+      pointerMax = pointerMid;
     }
+    pointerMid = ((pointerMax - pointerMin) / 2 + pointerMin).floor();
   }
-  return n;
+
+  if (pointerMid > 0 &&
+      _isSurrogatePairEnd(text1.codeUnitAt(text1.length - pointerMid))) {
+    pointerMid--;
+  }
+
+  return pointerMid;
 }
 
 /// Determine if the suffix of one string is the prefix of another.
@@ -283,4 +307,26 @@ String diffText2(List<Diff> diffs) {
     }
   }
   return text.toString();
+}
+
+bool _isSurrogatePairStart(int charCode) {
+  return charCode >= 0xd800 && charCode <= 0xdbff;
+}
+
+bool _isSurrogatePairEnd(int charCode) {
+  return charCode >= 0xdc00 && charCode <= 0xdfff;
+}
+
+bool _startsWithPairEnd(String string) {
+  if (string.isEmpty) {
+    return false;
+  }
+  return _isSurrogatePairEnd(string.codeUnitAt(0));
+}
+
+bool _endsWithPairStart(String string) {
+  if (string.isEmpty) {
+    return false;
+  }
+  return _isSurrogatePairStart(string.codeUnitAt(string.length - 1));
 }

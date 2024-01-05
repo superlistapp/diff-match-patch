@@ -16,8 +16,8 @@
 /// See the License for the specific language governing permissions and
 /// limitations under the License.
 
-import 'package:test/test.dart';
 import 'package:diff_match_patch/src/diff.dart';
+import 'package:test/test.dart';
 
 Diff deq(String t) => Diff(DIFF_EQUAL, t);
 Diff ddel(String t) => Diff(DIFF_DELETE, t);
@@ -787,6 +787,34 @@ main() {
             endTime.difference(startTime).inMilliseconds / 1000;
         // Test that we took at least the timeout period.
         expect(0.1, lessThanOrEqualTo(elapsedSeconds));
+      });
+
+      test('emoji replacement', () {
+        expect(diff('🔵', '🔴'), [ddel('🔵'), dins('🔴')]);
+        expect(diff('🔵🔵', '🔴🔴'), [ddel('🔵🔵'), dins('🔴🔴')]);
+        expect(diff('🔵🔴', '🔴🔵'), [dins('🔴'), deq('🔵'), ddel('🔴')]);
+        expect(diff('🐯', '🐶'), [ddel('🐯'), dins('🐶')]);
+        expect(diff('🐯🐯', '🐶🐶'), [ddel('🐯🐯'), dins('🐶🐶')]);
+        expect(diff('🐯🐶', '🐶🐯'), [dins('🐶'), deq('🐯'), ddel('🐶')]);
+        expect(diff('🍏🍎', '🍎'), [ddel('🍏'), deq('🍎')]);
+        expect(diff('🍏🍎', '🍏'), [deq('🍏'), ddel('🍎')]);
+        expect(diff('🍏', '🍏🍎'), [deq('🍏'), dins('🍎')]);
+        expect(diff('🍏', '🍎🍏'), [dins('🍎'), deq('🍏')]);
+        expect(diff('🍏🍎', '🍊'), [ddel('🍏🍎'), dins('🍊')]);
+        expect(
+          diff('🍏🍎🍊', '🍊🍎🍏'),
+          [ddel('🍏'), dins('🍊'), deq('🍎'), ddel('🍊'), dins('🍏')],
+        );
+        expect(
+          diff('ABC🍊123', 'ABC🐶123'),
+          [deq('ABC'), ddel('🍊'), dins('🐶'), deq('123')],
+        );
+        expect(diff('A🐶', 'A🍊'), [deq('A'), ddel('🐶'), dins('🍊')]);
+        expect(diff('🐶A', '🍊A'), [ddel('🐶'), dins('🍊'), deq('A')]);
+        expect(
+          diff('🐶ABC🐶', '🍊ABC🍊'),
+          [ddel('🐶'), dins('🍊'), deq('ABC'), ddel('🐶'), dins('🍊')],
+        );
       });
     });
   });
