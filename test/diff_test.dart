@@ -355,6 +355,19 @@ main() {
         expect(diffs,
             equals([deq('The xxx.'), dins(' The zzz.'), deq(' The yyy.')]));
       });
+
+      test('Surrogate pairs: without change', () {
+        final diffs = [deq('🔴'), dins('🟢'), deq('🔵')];
+        cleanupSemanticLossless(diffs);
+        // Should not change
+        expect(diffs, [deq('🔴'), dins('🟢'), deq('🔵')]);
+      });
+
+      test('Surrogate pairs: with change', () {
+        final diffs = [deq('🔴'), dins('🔵🟢'), deq('🔵')];
+        cleanupSemanticLossless(diffs);
+        expect(diffs, [deq('🔴🔵'), dins('🟢🔵')]);
+      });
     });
 
     group('Cleanup Semantic', () {
@@ -793,6 +806,7 @@ main() {
         expect(diff('🔵', '🔴'), [ddel('🔵'), dins('🔴')]);
         expect(diff('🔵🔵', '🔴🔴'), [ddel('🔵🔵'), dins('🔴🔴')]);
         expect(diff('🔵🔴', '🔴🔵'), [dins('🔴'), deq('🔵'), ddel('🔴')]);
+        expect(diff('🔴🔵', '🔴🟢🔵'), [deq('🔴'), dins('🟢'), deq('🔵')]);
         expect(diff('🐯', '🐶'), [ddel('🐯'), dins('🐶')]);
         expect(diff('🐯🐯', '🐶🐶'), [ddel('🐯🐯'), dins('🐶🐶')]);
         expect(diff('🐯🐶', '🐶🐯'), [dins('🐶'), deq('🐯'), ddel('🐶')]);
