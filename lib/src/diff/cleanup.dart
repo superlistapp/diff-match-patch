@@ -217,11 +217,14 @@ void cleanupSemanticLossless(List<Diff> diffs) {
       var bestEquality2 = equality2;
       var bestScore = _cleanupSemanticScore(equality1, edit) +
           _cleanupSemanticScore(edit, equality2);
-      while (
-          edit.isNotEmpty && equality2.isNotEmpty && edit[0] == equality2[0]) {
-        equality1 = '$equality1${edit[0]}';
-        edit = '${edit.substring(1)}${equality2[0]}';
-        equality2 = equality2.substring(1);
+      while (edit.isNotEmpty &&
+          equality2.isNotEmpty &&
+          edit.runes.first == equality2.runes.first) {
+        final firstRuneSize = edit.codeUnitAt(0).isHighSurrogate() ? 2 : 1;
+        equality1 = '$equality1${edit.substring(0, firstRuneSize)}';
+        edit =
+            '${edit.substring(firstRuneSize)}${equality2.substring(0, firstRuneSize)}';
+        equality2 = equality2.substring(firstRuneSize);
         var score = _cleanupSemanticScore(equality1, edit) +
             _cleanupSemanticScore(edit, equality2);
         // The >= encourages trailing rather than leading whitespace on edits.
@@ -527,4 +530,8 @@ extension Splice<T> on List<T> {
     replaceRange(start, start + count, insert ?? []);
     return result;
   }
+}
+
+extension on int {
+  bool isHighSurrogate() => this >= 0xD800 && this <= 0xDBFF;
 }
