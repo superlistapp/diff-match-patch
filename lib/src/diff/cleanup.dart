@@ -220,7 +220,7 @@ void cleanupSemanticLossless(List<Diff> diffs) {
       while (edit.isNotEmpty &&
           equality2.isNotEmpty &&
           edit.runes.first == equality2.runes.first) {
-        final firstRuneSize = edit.runes.first > 0xFFFF ? 2 : 1;
+        final firstRuneSize = edit.codeUnitAt(0).isHighSurrogate() ? 2 : 1;
         equality1 = '$equality1${edit.substring(0, firstRuneSize)}';
         edit =
             '${edit.substring(firstRuneSize)}${equality2.substring(0, firstRuneSize)}';
@@ -530,4 +530,8 @@ extension Splice<T> on List<T> {
     replaceRange(start, start + count, insert ?? []);
     return result;
   }
+}
+
+extension on int {
+  bool isHighSurrogate() => this >= 0xD800 && this <= 0xDBFF;
 }
